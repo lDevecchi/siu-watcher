@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path'; // esto ya es suficiente
-import { checkGrades } from './bot/guarani';
+import { saveSubjects  } from './bot/saveSubjects';
 
 let mainWindow: BrowserWindow;
 

@@ -1,6 +1,6 @@
-import { checkGrades } from "./guarani";
+import { saveSubjects  } from "./saveSubjects";
 
 export async function runCheck(email: string, password: string) {
-    const result = await checkGrades(email, password);
+    const result = await saveSubjects (email, password);
     return result;
 }

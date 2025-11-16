@@ -1,39 +1,25 @@
-import { chromium, Locator, Page } from '@playwright/test';
-import fs from 'fs';
-import { getFilePath } from '../utils/utils';
+import { Locator, Page } from "@playwright/test";
+import { ExamData, Subject } from "./types";
 
-export interface ExamData {
-    date: string;
-    description: string;
-    type: string;
-    grade: string;
-    result: string;
-}
-
-export interface Subject {
-    name: string;
-    examsData: ExamData[];
-}
-
-const login = async (page: Page, email: string, password: string) => {
+export const login = async (page: Page, email: string, password: string) => {
     await page.goto('https://guarani.frba.utn.edu.ar/autogestion/grado/');
     await page.getByRole('textbox', { name: 'Usuario' }).fill(email);
     await page.getByRole('textbox', { name: 'Contraseña' }).fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
 };
 
-const goToHistoriaAcademica = async (page: Page) => {
+export const goToHistoriaAcademica = async (page: Page) => {
     await page.goto('https://guarani.frba.utn.edu.ar/autogestion/grado/historia_academica');
     await page.waitForTimeout(200);
     await page.getByText('En curso', { exact: true }).click();
     await page.waitForTimeout(200);
 };
 
-const getSubjectName = async (btn: Locator): Promise<string> => {
+export const getSubjectName = async (btn: Locator): Promise<string> => {
     return (await btn.locator('xpath=ancestor::div[@class="catedras"]//h3').innerText()).trim();
 };
 
-const getExamsData = async (id: string, page: Page): Promise<ExamData[]> => {
+export const getExamsData = async (id: string, page: Page): Promise<ExamData[]> => {
     const subjectTable = `#info_det_${id} table`;
 
     // Wait for the subject details to be visible
@@ -61,18 +47,11 @@ const getExamsData = async (id: string, page: Page): Promise<ExamData[]> => {
     return results;
 };
 
-
-export const checkGrades = async (email: string, password: string) => {
-    const browser = await chromium.launch({ headless: false });
-    const page = await browser.newPage();
-
-    await login(page, email, password);
-    await goToHistoriaAcademica(page);
-
+export const extractSubjects = async (page: Page): Promise<Subject[]> => {
     const buttons = page.locator('a[data-origen="EnCurso"]');
+    const count = await buttons.count();
     const subjects: Subject[] = [];
 
-    const count = await buttons.count();
     for (let i = 0; i < count; i++) {
         const btn = buttons.nth(i);
         const id = await btn.getAttribute('id');
@@ -80,14 +59,11 @@ export const checkGrades = async (email: string, password: string) => {
 
         // Click on "Grabar"
         await btn.click();
-
         const name = await getSubjectName(btn);
         const examsData = await getExamsData(id, page);
 
         subjects.push({ name, examsData });
     }
 
-    fs.writeFileSync(getFilePath(), JSON.stringify(subjects, null, 2), 'utf8');
-
-    await browser.close();
+    return subjects;
 };
