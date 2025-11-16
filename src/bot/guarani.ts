@@ -24,99 +24,70 @@ const login = async (page: Page, email: string, password: string) => {
 
 const goToHistoriaAcademica = async (page: Page) => {
     await page.goto('https://guarani.frba.utn.edu.ar/autogestion/grado/historia_academica');
-
     await page.waitForTimeout(200);
     await page.getByText('En curso', { exact: true }).click();
     await page.waitForTimeout(200);
 };
 
-const getRowsInformation = async (filas: Locator, filasCount: number): Promise<ExamData[]> => {
+const getSubjectName = async (btn: Locator): Promise<string> => {
+    return (await btn.locator('xpath=ancestor::div[@class="catedras"]//h3').innerText()).trim();
+};
+
+const getExamsData = async (id: string, page: Page): Promise<ExamData[]> => {
+    const subjectTable = `#info_det_${id} table`;
+
+    // Wait for the subject details to be visible
+    await page.waitForSelector(`#info_det_${id}`, { state: 'visible' });
+
+    const tableExists = (await page.locator(subjectTable).count()) > 0;
+    if (!tableExists) return [];
+
+    await page.waitForSelector(`${subjectTable} tr:has(td)`, { state: 'attached' });
+    const filas = page.locator(`${subjectTable} tr:has(td)`);
+
     const results: ExamData[] = [];
+    const filasCount = await filas.count();
 
-    for (let j = 0; j < filasCount; j++) {
-        const row = filas.nth(j);
-        const cols = row.locator('td');
-
-        const date = (await cols.nth(0).innerText()).trim();
-        const description = (await cols.nth(1).innerText()).trim();
-        const type = (await cols.nth(2).innerText()).trim();
-        const grade = (await cols.nth(3).innerText()).trim();
-        const result = (await cols.nth(4).innerText()).trim();
+    for (let i = 0; i < filasCount; i++) {
+        const cols = filas.nth(i).locator('td');
         results.push({
-            date,
-            description,
-            type,
-            grade,
-            result
+            date: (await cols.nth(0).innerText()).trim(),
+            description: (await cols.nth(1).innerText()).trim(),
+            type: (await cols.nth(2).innerText()).trim(),
+            grade: (await cols.nth(3).innerText()).trim(),
+            result: (await cols.nth(4).innerText()).trim(),
         });
     }
-
     return results;
 };
+
 
 export const checkGrades = async (email: string, password: string) => {
     const browser = await chromium.launch({ headless: false });
     const page = await browser.newPage();
 
     await login(page, email, password);
-
     await goToHistoriaAcademica(page);
 
     const buttons = page.locator('a[data-origen="EnCurso"]');
-    const subjectsLength = await buttons.count();
-
     const subjects: Subject[] = [];
 
-    // Iterate over each subject
-    for (let i = 0; i < subjectsLength; i++) {
+    const count = await buttons.count();
+    for (let i = 0; i < count; i++) {
         const btn = buttons.nth(i);
-
-        // Get subject name
-        const subjectName = (await btn
-            .locator('xpath=ancestor::div[@class="catedras"]//h3')
-            .innerText()).trim();
-
         const id = await btn.getAttribute('id');
-        if (!id) {
-            console.log("[ERROR] No se pudo obtener el id del botón");
-            continue;
-        }
+        if (!id) continue;
 
-        // Click on "Detalle"
+        // Click on "Grabar"
         await btn.click();
 
-        // Wait on detail dropdown load
-        await page.waitForSelector(`#info_det_${id}`, { state: 'visible' });
+        const name = await getSubjectName(btn);
+        const examsData = await getExamsData(id, page);
 
-        // Check if table exists
-        const selectorTable = `#info_det_${id} table`;
-        const isTable = await page.locator(selectorTable).count();
-
-        // If no table, continue to next subject
-        if (isTable === 0) {
-            subjects.push({ name: subjectName, examsData: [] });
-            console.log(`📘 ${subjectName}: Sin evaluaciones`); //! Test purpose, Delete on final version.
-            continue;
-        }
-
-        // Now wait for rows with <td>
-        await page.waitForSelector(`${selectorTable} tr:has(td)`, { state: 'attached' });
-
-        // Filter only <tr> with <td> (avoids empty headers)
-        const filas = page.locator(`${selectorTable} tr:has(td)`);
-        const filasCount = await filas.count();
-
-        const examsData = filasCount > 0
-            ? await getRowsInformation(filas, filasCount)
-            : [];
-
-        subjects.push({
-            name: subjectName,
-            examsData,
-        });
+        subjects.push({ name, examsData });
     }
-    // Guardar archivo
-    fs.writeFileSync(getFilePath(), JSON.stringify(subjects, null, 2), "utf8");
+
+    fs.writeFileSync(getFilePath(), JSON.stringify(subjects, null, 2), 'utf8');
 
     await browser.close();
 };
