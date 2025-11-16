@@ -1,10 +1,23 @@
 import { chromium, Locator, Page } from '@playwright/test';
+import fs from 'fs';
+import { getFilePath } from '../utils/utils';
+
+export interface ExamData {
+    date: string;
+    description: string;
+    type: string;
+    grade: string;
+    result: string;
+}
+
+export interface Subject {
+    name: string;
+    examsData: ExamData[];
+}
 
 const login = async (page: Page, email: string, password: string) => {
     await page.goto('https://guarani.frba.utn.edu.ar/autogestion/grado/');
-    await page.getByRole('textbox', { name: 'Usuario' }).click();
     await page.getByRole('textbox', { name: 'Usuario' }).fill(email);
-    await page.getByRole('textbox', { name: 'Usuario' }).press('Tab');
     await page.getByRole('textbox', { name: 'Contraseña' }).fill(password);
     await page.getByRole('button', { name: 'Ingresar' }).click();
 };
@@ -17,28 +30,31 @@ const goToHistoriaAcademica = async (page: Page) => {
     await page.waitForTimeout(200);
 };
 
-const getRowInformation = async (filas: Locator, filasCount: number) => {
+const getRowsInformation = async (filas: Locator, filasCount: number): Promise<ExamData[]> => {
+    const results: ExamData[] = [];
+
     for (let j = 0; j < filasCount; j++) {
-        const fila = filas.nth(j);
-        const cols = fila.locator('td');
+        const row = filas.nth(j);
+        const cols = row.locator('td');
 
-        const fecha = (await cols.nth(0).innerText()).trim();
-        const descripcion = (await cols.nth(1).innerText()).trim();
-        const tipo = (await cols.nth(2).innerText()).trim();
-        const nota = (await cols.nth(3).innerText()).trim();
-        const resultado = (await cols.nth(4).innerText()).trim();
-
-        console.log({
-            fecha,
-            descripcion,
-            tipo,
-            nota,
-            resultado
+        const date = (await cols.nth(0).innerText()).trim();
+        const description = (await cols.nth(1).innerText()).trim();
+        const type = (await cols.nth(2).innerText()).trim();
+        const grade = (await cols.nth(3).innerText()).trim();
+        const result = (await cols.nth(4).innerText()).trim();
+        results.push({
+            date,
+            description,
+            type,
+            grade,
+            result
         });
     }
+
+    return results;
 };
 
-export const checkNotas = async (email: string, password: string) => {
+export const checkGrades = async (email: string, password: string) => {
     const browser = await chromium.launch({ headless: false });
     const page = await browser.newPage();
 
@@ -46,14 +62,17 @@ export const checkNotas = async (email: string, password: string) => {
 
     await goToHistoriaAcademica(page);
 
-    const botones = page.locator('a[data-origen="EnCurso"]');
-    const subjectsLength = await botones.count();
-    // Itera por cada materia
+    const buttons = page.locator('a[data-origen="EnCurso"]');
+    const subjectsLength = await buttons.count();
+
+    const subjects: Subject[] = [];
+
+    // Iterate over each subject
     for (let i = 0; i < subjectsLength; i++) {
-        const btn = botones.nth(i);
+        const btn = buttons.nth(i);
 
         // Get subject name
-        const nombreMateria = (await btn
+        const subjectName = (await btn
             .locator('xpath=ancestor::div[@class="catedras"]//h3')
             .innerText()).trim();
 
@@ -66,36 +85,38 @@ export const checkNotas = async (email: string, password: string) => {
         // Click on "Detalle"
         await btn.click();
 
-        // Esperar a que cargue el contenedor general del detalle
+        // Wait on detail dropdown load
         await page.waitForSelector(`#info_det_${id}`, { state: 'visible' });
 
-        // ==== Verificar si hay tabla ====
-        const selectorTabla = `#info_det_${id} table`;
-        const existeTabla = await page.locator(selectorTabla).count();
+        // Check if table exists
+        const selectorTable = `#info_det_${id} table`;
+        const isTable = await page.locator(selectorTable).count();
 
-        if (existeTabla === 0) {
-            console.log(`📘 ${nombreMateria}: No hay información sobre evaluaciones`);
+        // If no table, continue to next subject
+        if (isTable === 0) {
+            subjects.push({ name: subjectName, examsData: [] });
+            console.log(`📘 ${subjectName}: Sin evaluaciones`); //! Test purpose, Delete on final version.
             continue;
         }
 
-        // Ahora sí esperamos a que haya filas con <td>
-        await page.waitForSelector(`${selectorTabla} tr:has(td)`, { state: 'attached' });
+        // Now wait for rows with <td>
+        await page.waitForSelector(`${selectorTable} tr:has(td)`, { state: 'attached' });
 
-        // Filtrar solo <tr> con <td> (evita headers vacíos)
-        const filas = page.locator(`${selectorTabla} tr:has(td)`);
+        // Filter only <tr> with <td> (avoids empty headers)
+        const filas = page.locator(`${selectorTable} tr:has(td)`);
         const filasCount = await filas.count();
 
-        if (filasCount === 0) {
-            console.log(`📘 ${nombreMateria}: Tabla presente pero sin evaluaciones`);
-            continue;
-        }
+        const examsData = filasCount > 0
+            ? await getRowsInformation(filas, filasCount)
+            : [];
 
-        console.log(`📘 ${nombreMateria}:`);
-
-        await getRowInformation(filas, filasCount);
+        subjects.push({
+            name: subjectName,
+            examsData,
+        });
     }
+    // Guardar archivo
+    fs.writeFileSync(getFilePath(), JSON.stringify(subjects, null, 2), "utf8");
 
     await browser.close();
-
-    // TODO: Seleccionar todo el texto del div que contiene las notas. En otro archivo guardamos las notas anteriores y las comparamos
 };

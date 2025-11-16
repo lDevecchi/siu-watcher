@@ -1,6 +1,6 @@
-import { checkNotas } from "./guarani";
+import { checkGrades } from "./guarani";
 
 export async function runCheck(email: string, password: string) {
-    const result = await checkNotas(email, password);
+    const result = await checkGrades(email, password);
     return result;
 }
