@@ -1,8 +1,7 @@
 import { chromium } from '@playwright/test';
-import fs from 'fs';
-import { extractSubjects, getExamsData, getSubjectName, goToHistoriaAcademica, login } from '../utils/commands';
+import { extractSubjects, goToHistoriaAcademica, login } from '../utils/commands';
 import { Subject } from '../utils/types';
-import { getFilePath } from '../utils/functions';
+import { updateSubjectsFile } from '../utils/functions';
 
 export const saveSubjects = async (email: string, password: string) => {
     const browser = await chromium.launch({ headless: false });
@@ -12,8 +11,7 @@ export const saveSubjects = async (email: string, password: string) => {
     await goToHistoriaAcademica(page);
 
     const subjects: Subject[] = await extractSubjects(page);
-
-    fs.writeFileSync(getFilePath(), JSON.stringify(subjects, null, 2), 'utf8');
+    updateSubjectsFile(subjects);
 
     await browser.close();
 };

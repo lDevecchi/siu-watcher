@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path'; // esto ya es suficiente
-import { saveSubjects  } from './bot/saveSubjects';
+import { saveSubjects } from './bot/saveSubjects';
+import { checkChanges } from './bot/checkChanges';
 
 let mainWindow: BrowserWindow;
 
