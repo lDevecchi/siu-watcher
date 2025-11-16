@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path'; // esto ya es suficiente
+import { checkNotas } from './bot/guarani';
 
 let mainWindow: BrowserWindow;
 
@@ -16,8 +17,8 @@ function createWindow() {
 
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 }
-
 app.whenReady().then(createWindow);
 
+// Handle close app.
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
