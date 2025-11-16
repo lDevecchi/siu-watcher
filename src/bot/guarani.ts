@@ -48,46 +48,49 @@ export const checkNotas = async (email: string, password: string) => {
 
     const botones = page.locator('a[data-origen="EnCurso"]');
     const subjectsLength = await botones.count();
-
     // Itera por cada materia
     for (let i = 0; i < subjectsLength; i++) {
-       const btn = botones.nth(i);
+        const btn = botones.nth(i);
 
-    const id = await btn.getAttribute('id');
-    if (!id) {
-        console.log("[ERROR] No se pudo obtener el id del botón");
-        continue;
-    }
+        // Get subject name
+        const nombreMateria = (await btn
+            .locator('xpath=ancestor::div[@class="catedras"]//h3')
+            .innerText()).trim();
 
-    // Obtener el nombre de la materia
-    const nombreMateria = (await btn
-        .locator('xpath=ancestor::div[@class="catedras"]//h3')
-        .innerText()).trim();
+        const id = await btn.getAttribute('id');
+        if (!id) {
+            console.log("[ERROR] No se pudo obtener el id del botón");
+            continue;
+        }
 
-    // Abrir detalle
-    await btn.click();
+        // Click on "Detalle"
+        await btn.click();
 
-    // ==== Verificar si hay tabla ====
-    const selectorTabla = `#info_det_${id} table`;
-    const existeTabla = await page.locator(selectorTabla).count();
+        // Esperar a que cargue el contenedor general del detalle
+        await page.waitForSelector(`#info_det_${id}`, { state: 'visible' });
 
-    if (existeTabla === 0) {
-        console.log(`📘 ${nombreMateria}: No hay información sobre evaluaciones`);
-        continue;
-    }
+        // ==== Verificar si hay tabla ====
+        const selectorTabla = `#info_det_${id} table`;
+        const existeTabla = await page.locator(selectorTabla).count();
 
-    // Esperar filas con datos
-    await page.waitForSelector(`${selectorTabla} tr:has(td)`);
+        if (existeTabla === 0) {
+            console.log(`📘 ${nombreMateria}: No hay información sobre evaluaciones`);
+            continue;
+        }
 
-    const filas = page.locator(`${selectorTabla} tr:has(td)`);
-    const filasCount = await filas.count();
+        // Ahora sí esperamos a que haya filas con <td>
+        await page.waitForSelector(`${selectorTabla} tr:has(td)`, { state: 'attached' });
 
-    if (filasCount === 0) {
-        console.log(`📘 ${nombreMateria}: Tabla presente pero vacía`);
-        continue;
-    }
+        // Filtrar solo <tr> con <td> (evita headers vacíos)
+        const filas = page.locator(`${selectorTabla} tr:has(td)`);
+        const filasCount = await filas.count();
 
-    console.log(`📘 ${nombreMateria}:`);
+        if (filasCount === 0) {
+            console.log(`📘 ${nombreMateria}: Tabla presente pero sin evaluaciones`);
+            continue;
+        }
+
+        console.log(`📘 ${nombreMateria}:`);
 
         await getRowInformation(filas, filasCount);
     }
