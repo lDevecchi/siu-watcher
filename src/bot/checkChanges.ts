@@ -30,7 +30,7 @@ const compareForUpdates = (oldSubjects: Subject[], newSubjects: Subject[]) => {
 };
 
 export const checkChanges = async (email: string, password: string) => {
-    const browser = await chromium.launch({ headless: false });
+    const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
     await login(page, email, password);
