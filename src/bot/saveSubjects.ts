@@ -1,18 +1,39 @@
 import { chromium } from '@playwright/test';
 import { extractSubjects, goToHistoriaAcademica, login } from '../utils/commands';
-import { Subject } from '../utils/types';
+import { ResponseStatus, Subject } from '../utils/types';
 import { updateSubjectsFile } from '../utils/functions';
 
-export const saveSubjects = async (email: string, password: string): Promise<boolean> => {
+export const saveSubjects = async (email: string, password: string): Promise<ResponseStatus> => {
     const browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await login(page, email, password);
-    await goToHistoriaAcademica(page);
+    try {
+        await login(page, email, password);
+    } catch (error) {
+        console.error(error);
+        return ResponseStatus.INVALID_CREDENTIALS;
+    }
+    
+    try {
+        await goToHistoriaAcademica(page);
+    } catch (error) {
+        console.error(error);
+        return ResponseStatus.ERR_ACCESS_ACADEMIC_RECORD;
+    }
 
-    const subjects: Subject[] = await extractSubjects(page);
+    let subjects: Subject[] = [];
+
+    try {
+        subjects = await extractSubjects(page);
+    } catch (error) {
+        console.error(error);
+        return ResponseStatus.ERR_GET_SUBJECTS;
+    }
+
     await browser.close();
+
+    // Write subjects on subjectsInfo.txt
     updateSubjectsFile(subjects);
 
-    return true;
+    return ResponseStatus.SUCCESS;
 };

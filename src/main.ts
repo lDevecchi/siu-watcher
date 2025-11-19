@@ -4,8 +4,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import { checkForChanges, getSubjects } from './bot/index';
 
 let mainWindow: BrowserWindow | null = null;
-let watchJob: ScheduledTask | null = null;
-
+let cronJob: ScheduledTask | null = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -17,6 +16,8 @@ function createWindow() {
       nodeIntegration: false,
     },
   });
+
+  //! Delete after testing
   console.log('dirname:', __dirname);
   console.log('HTML path:', path.join(__dirname, 'renderer', 'index.html'));
 
@@ -29,35 +30,35 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// IPC: Obtener notas
+// IPC: Save Subjects
 ipcMain.handle('get-subjects', async (_event, email: string, password: string) => {
   try {
     const result = await getSubjects(email, password);
-    return { success: true, data: result };
+    return { success: true, data: result }; //TODO: Change return
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: (err as Error).message }; //TODO: Change return
   }
 });
 
 // IPC: Iniciar / detener observación
-ipcMain.handle('toggle-watch', async (_event, email: string, password: string) => {
-  if (watchJob) {
-    watchJob.stop();
-    watchJob = null;
+ipcMain.handle('toggle-cron-job', async (_event, email: string, password: string) => {
+  if (cronJob) {
+    cronJob.stop();
+    cronJob = null;
     return { running: false };
   }
 
   // Cron: cada minuto
-  watchJob = cron.schedule('* * * * *', async () => {
+  cronJob = cron.schedule('* * * * *', async () => {
     try {
       const result = await checkForChanges(email, password);
-      mainWindow?.webContents.send('watch-update', result);
+      mainWindow?.webContents.send('cron-job-update', result);
     } catch (err) {
-      mainWindow?.webContents.send('watch-error', (err as Error).message);
+      mainWindow?.webContents.send('cron-job-error', (err as Error).message);
     }
   });
 
-  watchJob.start();
+  cronJob.start();
   return { running: true };
 });
 
